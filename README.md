@@ -1,4 +1,4 @@
-# imageRegeneratorPrestashop
+# imageTrimmerRegeneratorPrestashop
 
 Regenerate safely prestashop images with async process (works on low performance server). 
 15/04/2022 Added Imagick Trimmer for keep homogeneity between all products images on listings. 
