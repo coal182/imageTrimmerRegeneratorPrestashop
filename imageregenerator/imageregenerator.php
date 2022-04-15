@@ -7,18 +7,18 @@ class ImageRegenerator extends Module
 	public function __construct()
 	{
 		$this->bootstrap = true;
-		$this->name = 'imageregenerator';
+		$this->name = 'imagetrimmerregenerator';
 		$this->tab = 'administration';
-		$this->version = '1.1';
-		$this->author = 'Jérémy Besson';
+		$this->version = '1.2';
+		$this->author = 'Cristian Martín';
 		$this->need_instance = 0;
-		$this->ps_versions_compliancy = array('min' => '1.5', 'max' => '1.7');
+		$this->ps_versions_compliancy = array('min' => '1.5', 'max' => _PS_VERSION_);
 		$this->dependencies = null;
 
 		parent::__construct();
 
 		$this->displayName = $this->l('Image Regenerator');
-		$this->description = $this->l('Use ajax to regenerate image safely.');
+		$this->description = $this->l('Use ajax to regenerate image safely and trim/crop images for preserve homogeneity. Original module created by Jérémy Besson @meetjey');
 
 		$this->confirmUninstall = $this->l('Are you sure you want to uninstall?');
 
@@ -94,7 +94,9 @@ class ImageRegenerator extends Module
 				$list[$proc["type"]] = array("todo"=>array(),"done"=>array(),"errors"=>array());
 				if($proc["type"]=="products"){
 					foreach($images as $img){
-						$list["products"]["todo"][] = $img['id_image'];
+						if ($img['id_image'] == '2656' || TRUE) { // To try with a product
+							$list["products"]["todo"][] = $img; // ['id_image'], ['id_product']
+						}						
 					}
 				}else{
 					$scanned_directory = array_diff(scandir($proc['dir']), array('..', '.'));
@@ -138,7 +140,7 @@ class ImageRegenerator extends Module
 				</div>
 			</div>
 		</div>
-		<div class="panel"><h3>'.$this->l('Debug').'</h3><div id="autoImg-progress" style="width:100%;line-height:20px;height:60px;overflow:auto;"></div><br/><div class="clearfix"></div>
+		<div class="panel"><h3>'.$this->l('Debug').'</h3><div id="autoImg-progress" style="width:100%;line-height:20px;height:400px;overflow:auto;"></div><br/><div class="clearfix"></div>
 		<script>var image_regenerator_can_run_queue = true;var image_regenerator_queuing_what = '.$image_regenerator_queue_what.';
 		var autoImg = $.parseJSON(\''.json_encode($list).'\');
 		var autoImgPath = "'.$this->context->link->getAdminLink('AdminModules').'&configure='.$this->name.'";
@@ -154,6 +156,7 @@ class ImageRegenerator extends Module
 			'products' => _PS_PROD_IMG_DIR_,
 			'stores' => _PS_STORE_IMG_DIR_
 			);
+		$id_product = (int)Tools::getValue('product');
 		$baseType = Tools::getValue('type');
 		$type = ImageType::getImagesTypes($baseType);
 		$image = Tools::getValue('image');
@@ -162,10 +165,15 @@ class ImageRegenerator extends Module
 		$success = null;
 		$errors = null;
 		$watermarked = 0;
+		$msg = '';
+
 		if($baseType!="products"){
+
 			if (preg_match('/^[0-9]*\.jpg$/', $image)){
+
 				foreach ($type as $k => $imageType)
 				{
+
 					// Customizable writing dir
 					$newDir = $dir;
 					if ($imageType['name'] == 'thumb_scene')
@@ -173,8 +181,10 @@ class ImageRegenerator extends Module
 					if (!file_exists($newDir))
 						$errors = 1;
 					$newFile = $newDir.substr($image, 0, -4).'-'.stripslashes($imageType['name']).'.jpg';
+
 					if(file_exists($newFile) && !unlink($newFile))
 						$errors = 1;
+
 					if (!file_exists($newFile))
 					{
 
@@ -188,18 +198,25 @@ class ImageRegenerator extends Module
 						}else{
 							$success = 1;
 						}
+
 					}else{
 						$errors = 1;
 					}
 				}
+
 			}else{
 				$success=1;
 			}
+
 		}else{
+
 			$imageObj = new Image($image);
-			$existing_img = $dir.$imageObj->getExistingImgPath().'.jpg';
+			//print_r($imageObj);
+			$existing_img = $dir.$imageObj->getExistingImgPath().'.'.$imageObj->image_format; // Always is .jpg even if is png
+
 			if (file_exists($existing_img) && filesize($existing_img))
 			{
+
 				if($watermark == 1){
 					$watermarked = 1;
 					$watermark = ModuleCore::getInstanceByName("watermark");
@@ -217,30 +234,84 @@ class ImageRegenerator extends Module
 						$errors = 1;
 					}
 				}
+
 				if(count($type)>0){
+
 					foreach ($type as $imageType){
-						$newFile = $dir.$imageObj->getExistingImgPath().'-'.stripslashes($imageType['name']).'.jpg';
-						if(file_exists($newFile) && !unlink($newFile))
-							$errors = 1;
-						if (!file_exists($newFile)){
-							if (!ImageManager::resize($existing_img, $newFile, (int)($imageType['width']), (int)($imageType['height'])))
-							{
-								$errors = sprintf('Original image is corrupt (%s) or bad permission on folder', $existing_img);
+
+						$msg .= $imageType['name'].' - '.$id_product."<br /> ";
+
+						if (in_array($imageType['name'], ["home_default"])){							
+
+							$newFile = $dir.$imageObj->getExistingImgPath().'-'.stripslashes($imageType['name']).'.jpg';
+							$trimedPath = $dir.$imageObj->getExistingImgPath().'-'.stripslashes($imageType['name']).'-trimmed.jpg';
+
+							$msg .= "Original: ".$existing_img."<br /> ";
+
+							$existing_img = $this->trimImage($existing_img, $trimedPath);
+
+							$msg .= $existing_img."<br /> ";
+
+							if(file_exists($newFile) && !unlink($newFile))
+								$errors = 1;
+
+							if (!file_exists($newFile)){
+
+								if (!ImageManager::resize($existing_img, $newFile, (int)($imageType['width']), (int)($imageType['height'])))
+								{
+									$errors = sprintf('Original image is corrupt (%s) or bad permission on folder', $existing_img);
+								}else{
+									$success = 1;
+								}
+
 							}else{
-								$success = 1;
+								$errors = 1;
 							}
-						}else{
-							$errors = 1;
+
 						}
+						
 					}
+
 				}
-			}
-			else
-			{
+			
+			}else{
 				$errors = sprintf('Original image is missing or empty (%s)', $existing_img);
 			}
+
 		}
-		echo json_encode(array('success'=>$success,'error'=>$errors,'watermark'=>$watermarked));
+
+		echo json_encode(array('success'=>$success,'error'=>$errors,'watermark'=>$watermarked, 'msg'=>$msg));
 		exit;
+
 	}
+
+	function trimImage($imagePath, $trimedPath) {
+
+		if (extension_loaded('imagick')) {
+    		
+			$im = new Imagick($imagePath);
+
+			// White background if transparency for png
+			$im->setImageBackgroundColor('white');
+			$im->setImageAlphaChannel(Imagick::ALPHACHANNEL_REMOVE);
+			$im->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);  
+
+			$im->trimImage(0);
+
+			// adds some padding
+			$im->borderImage('white', 20, 20);
+
+			/* Tint to check is working */
+			/*$tint = new \ImagickPixel("rgb(255, 0, 0)");
+		    $opacity = new \ImagickPixel("rgb(128, 128, 128, $a)");
+		    $imagePath->tintImage($tint, $opacity);*/
+
+			$im->writeImage($trimedPath);
+
+		}
+
+		return $trimedPath;
+	
+	}
+
 }
