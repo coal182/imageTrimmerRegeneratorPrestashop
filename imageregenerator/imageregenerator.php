@@ -4,10 +4,29 @@ if (!defined('_PS_VERSION_'))
 
 class ImageRegenerator extends Module
 {
+
+	public $menus = array(
+        array(
+	        'is_root'           => true,
+            'name'              => 'Regenerar Imágenes',
+            'class_name'        => 'imageregenerator',
+            'visible'           => true,
+            'parent_class_name' => 0,
+	    ),
+        array(
+            'is_root'           => false,
+            'name'              => 'Regenerar Imágenes',
+            'class_name'        => 'AdminImageRegeneratorConfig',
+            'visible'           => true,
+            'parent_class_name' => 'imageregenerator',
+        ),
+    );
+
+
 	public function __construct()
 	{
 		$this->bootstrap = true;
-		$this->name = 'imagetrimmerregenerator';
+		$this->name = 'imageregenerator';
 		$this->tab = 'administration';
 		$this->version = '1.2';
 		$this->author = 'Cristian Martín';
@@ -17,21 +36,50 @@ class ImageRegenerator extends Module
 
 		parent::__construct();
 
-		$this->displayName = $this->l('Image Regenerator');
-		$this->description = $this->l('Use ajax to regenerate image safely and trim/crop images for preserve homogeneity. Original module created by Jérémy Besson @meetjey');
+		$this->displayName = $this->l('Regenerar Imágenes');
+		$this->description = $this->l('Regenerar Imágenes con Recorte incluido');
 
 		$this->confirmUninstall = $this->l('Are you sure you want to uninstall?');
 
+		/* No configuration needed:
 		if (!Configuration::get('IMAGEREGENERATOR'))
 			$this->warning = $this->l('No name provided');
+		*/
 	}
 
+
+	/**
+     * Install the required tabs, configs and stuff
+     *
+     * @return bool
+     * @throws PrestaShopException
+     *
+     * @throws PrestaShopDatabaseException
+     * @since 0.0.1
+     *
+     */
 	public function install()
 	{
-		if (parent::install() == false || !$this->registerHook('actionAdminControllerSetMedia'))
-			return false;
-		return true;
+
+		$tabRepository = new \PrestaChamps\PrestaShop\Tab\TabRepository($this->menus, 'imageregenerator');
+        $tabRepository->install();
+
+        return parent::install() && $this->registerHook('actionAdminControllerSetMedia');
+
 	}
+
+	 /**
+     * @return bool
+     * @throws PrestaShopDatabaseException
+     * @throws PrestaShopException
+     */
+    public function uninstall()
+    {
+        $tabRepository = new \PrestaChamps\PrestaShop\Tab\TabRepository($this->menus, 'imageregenerator');
+        $tabRepository->uninstall();
+
+        return parent::uninstall();
+    }
 
 	public function hookActionAdminControllerSetMedia()
 	{
@@ -119,7 +167,7 @@ class ImageRegenerator extends Module
 			<div class="btn-toolbar" role="toolbar">
 				<div class="btn-group">
 					<button class="btn btn-primary" id="image_regenerator-pause"><span class="icon-pause"></span> '.$this->l('PAUSE').'</button>
-					<button class="btn btn-success" id="image_regenerator-resume"><span class="icon-play"></span> '.$this->l('RESUME').'</button>
+					<button class="btn btn-success" id="image_regenerator-resume"><span class="icon-play"></span></button>
 				</div>
 				<div class="btn-group">
 					<form method="post" id="image_regenerator_save_form">
